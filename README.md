@@ -4,6 +4,52 @@ Briefcase is a simple plug for transporting temporary data through requests. You
 
 **Important Note:** This is code is still highly experimental
 
+## Use case
+
+Imagine the following scenario: You are building your own blog which has posts and comments. A common implementation could be having RESTfull resources like so:
+
+```elixir
+resource "/posts", PostController do
+  resource /comments", CommentController
+end
+```
+
+Now, let's imagine that you want to see all recent comments when you access a post:
+
+```elixir
+def show(conn, %{"post_id" => post_id}) do
+ comments = Posts.recent_comments(post_id)
+ render(conn, "show.html", comments: comments)
+end
+```
+
+So far so good... After you create a post, you can access it and see a list of recent comments. Now, we want to add a commment box so users can comment on those posts: 
+
+```elixir
+def show(conn, %{"post_id" => post_id}) do
+ comments = Posts.recent_comments(post_id)
+ comment_changeset = Posts.change_comment()
+ render(conn, "show.html", comments: comments, comment_changeset: comment_changeset)
+end
+```
+
+For the sake of the example, let's say we want to limit the comments to no more than 300 caracteres. After those validations are in place, we'll have something like this:
+
+```elixir
+def create(conn, %{"post_id" => post_id, "commment" => comment_params}) do
+  post = Posts.get_post!(post_id)
+  case Posts.create_comment(post, comment_params) do
+    {:ok, comment} -> redirect(to: Routes.post_path(conn, :show, post)
+    {:error, %Ecto.Changeset{} = changeset} -> redirect(to: Routes.post_path(conn, :show, post)
+  end
+end
+``` 
+
+Now notice that, because we have a separate resource to create comments, we want to return back to the post page to see that our comment was properly created. However, what happens if a user tries to create a invalid comment? If that the case, we should be able to show a helpfull message so the user can fix what's wrong and try again. 
+One way of doing that is to re-render the post page again, passing the recent comments and every other assign that its necessary to render that page again. Although _there are various ways of doing that¹_, what if we delegate the rendering responsability only to the `show` action of `PostController`? We do that by redirecting the user to the action which knows what is required for that page to properly function. Ok, but now that we are redirecting the user back to the post page, we won't be able to return the validated changeset which contains helpfull error message to our user, and that's where the PRG pattern commes to the rescue.
+
+> ¹ A common alternative is to abstract the code into a separate, helper function that can be called from both controllers and helps compose the assigns necessary to render the page. However, this might not be the best option for some use cases.
+
 ## Setup
 
 Since the package is not published on hex, the only way you can use it right now is by referencing the repository directly in in your `mix.exs` file:
@@ -119,3 +165,7 @@ end
 > ¹**Recycling**: Any content not already marked as dirty becomes dirty before this request is processed  
 
 > ²**Cleanup**: After the response, deletes any content that was previously marked as "dirty" 
+
+## TODOs
+
+- [ ] Add option to save session store to database instead of cookie
